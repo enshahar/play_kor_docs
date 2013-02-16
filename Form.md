@@ -115,3 +115,175 @@ object Form {
 
 }
 ```
+
+컴패니언 객체에 `apply()` 메소드가 정의되어 있다(참고로, 클래스 정의 안에는 필드 억세스를 위한 `apply()`
+메소드가 있다.) 두 가지 메소드가 있는데, 차이는 루트키를 정의하느냐 마느냐이다
+(이 부분은 나중에 기회가 되면 설명할 것이다). 이를 제외하고 나면, 예상했던 대로 `mapping`만 정의하고, 
+나머지는 `Map.empty`, `Nil`, `None`등을 넘겨서 `Form`객체를 초기화해 준다.
+
+다시, loginForm을 만들었던 기억을 되살려보자.
+
+```scala
+import play.api.data._
+import play.api.data.Forms._
+
+val loginForm = Form(
+  tuple(
+    "userid" -> text,
+    "password" -> text
+  )
+)
+```
+
+이제 `Form.apply()`가 어떻게 정의되어 있는지를 알고 있으므로, 쉽게 tuple이라는 것이 mapping을 생성해주는
+메소드 또는 함수라는 사실을 유추할 수 있다.
+
+이제 `Form[T]`의 생성자에 정의된 `mapping`의 타입 `Mapping[T]` 타입이름을 보면 
+딱 "T 타입으로의 맵핑이구나" 하는 감이 온다. 따라서, 아마도 Mapping[T]는 필드 이름과 필드 값을 받아서 
+T 타입의 값을 만들어내주는 객체가 되리라 상상할 수 있다. 그것으로 충분할까? 아니다. 조금 더 생각해보자.
+
+`Form[T]`에 있는 `bind`류의 함수들은 필드이름,필드값을 받아서 T 값을 만들어낼 수 있다면 충분히 
+구현 가능할 것이다. 그렇지만, `fill`류의 함수들은 거꾸로 T에서 필드 값을 만들어 줘야 한다. 따라서 
+`Mapping[T]`는 단순히 한방향(필드이름, 값의 맵 => T 타입의 값)만 지원해서는 안되고, 그 역방향(T 타입의 값 => 필드이름, 값의 맵)도 
+지원해 주어야 함을 알 수 있다.
+
+여기서 조금 더 나아가 생각해보면, Form[T]에는 입력값의 적합성 검사와 관련한 어떤 정보도 들어가 있지 않으므로, 
+Mapping[T]에 이런 적합성 검사가 들어가야 함을 예상할 수 있다.
+
+자, 그럼 한번 Mapping[T] 코드를 살펴보자. 역시 Form[T]와 같은 파일(Form.scala)에 정의되어 있다.
+
+```scala
+
+/**
+ * A mapping is a two-way binder to handle a form field.
+ */
+trait Mapping[T] {
+  self =>
+
+  /**
+   * The field key.
+   */
+  val key: String
+
+  /**
+   * Sub-mappings (these can be seen as sub-keys).
+   */
+  val mappings: Seq[Mapping[_]]
+
+  /**
+   * The Format expected for this field, if it exists.
+   */
+  val format: Option[(String, Seq[Any])] = None
+
+  /**
+   * The constraints associated with this field.
+   */
+  val constraints: Seq[Constraint[T]]
+
+  /**
+   * Binds this field, i.e. construct a concrete value from submitted data.
+   *
+   * @param data the submitted data
+   * @return either a concrete value of type `T` or a set of errors, if the binding failed
+   */
+  def bind(data: Map[String, String]): Either[Seq[FormError], T]
+
+  /**
+   * Unbinds this field, i.e. transforms a concrete value to plain data.
+   *
+   * @param value the value to unbind
+   * @return either the plain data or a set of errors, if the unbinding failed
+   */
+  def unbind(value: T): (Map[String, String], Seq[FormError])
+
+  /**
+   * Constructs a new Mapping based on this one, adding a prefix to the key.
+   *
+   * @param prefix the prefix to add to the key
+   * @return the same mapping, with only the key changed
+   */
+  def withPrefix(prefix: String): Mapping[T]
+
+  /**
+   * Constructs a new Mapping based on this one, by adding new constraints.
+   *
+   * For example:
+   * {{{
+   *   import play.api.data._
+   *   import validation.Constraints._
+   *
+   *   Form("phonenumber" -> text.verifying(required) )
+   * }}}
+   *
+   * @param constraints the constraints to add
+   * @return the new mapping
+   */
+  def verifying(constraints: Constraint[T]*): Mapping[T]
+
+  /**
+   * Constructs a new Mapping based on this one, by adding a new ad-hoc constraint.
+   *
+   * For example:
+   * {{{
+   *   import play.api.data._
+   *   import validation.Constraints._
+   *
+   *   Form("phonenumber" -> text.verifying {_.grouped(2).size == 5})
+   * }}}
+   *
+   * @param constraint a function describing the constraint that returns `false` on failure
+   * @return the new mapping
+   */
+  def verifying(constraint: (T => Boolean)): Mapping[T] = verifying("error.unknown", constraint)
+
+  /**
+   * Constructs a new Mapping based on this one, by adding a new ad-hoc constraint.
+   *
+   * For example:
+   * {{{
+   *   import play.api.data._
+   *   import validation.Constraints._
+   *
+   *   Form("phonenumber" -> text.verifying("Bad phone number", {_.grouped(2).size == 5}))
+   * }}}
+   *
+   * @param error The error message used if the constraint fails
+   * @param constraint a function describing the constraint that returns `false` on failure
+   * @return the new mapping
+   */
+  def verifying(error: => String, constraint: (T => Boolean)): Mapping[T] = {
+    verifying(Constraint { t: T =>
+      if (constraint(t)) Valid else Invalid(Seq(ValidationError(error)))
+    })
+  }
+
+  /**
+   * Transform this Mapping[T] to a Mapping[B].
+   *
+   * @tparam B The type of the new mapping.
+   * @param f1 Transform value of T to a value of B
+   * @param f2 Transform value of B to a value of T
+   */
+  def transform[B](f1: T => B, f2: B => T): Mapping[B] = WrappedMapping(this, f1, f2)
+
+  // Internal utilities
+
+  protected def addPrefix(prefix: String) = {
+    Option(prefix).filterNot(_.isEmpty).map(p => p + Option(key).filterNot(_.isEmpty).map("." + _).getOrElse(""))
+  }
+
+  protected def applyConstraints(t: T): Either[Seq[FormError], T] = {
+    Right(t).right.flatMap { v =>
+      Option(collectErrors(v)).filterNot(_.isEmpty).toLeft(v)
+    }
+  }
+
+  protected def collectErrors(t: T): Seq[FormError] = {
+    constraints.map(_(t)).collect {
+      case Invalid(errors) => errors.toSeq
+    }.flatten.map(ve => FormError(key, ve.message, ve.args))
+  }
+
+}
+```
+
