@@ -586,6 +586,7 @@ trait ObjectMapping {
 ```
 
 `merge`가 하는 일은 다음과 같다.
+
 1. `results.map(_.right.map(Seq(_)))` : `results` 리스트 내의 `Either` 중에서 `Right[Any]`인 것들만 다시 `Right[Seq[Any]]` 형태로 만들어준다. 
  이렇게 하는 이유는 `results` 리스트가 `Left`인 경우에는 `Seq`이지만, `Right`인 경우에는 `Seq`가 아니라서 타입이 어긋나기 때문에, 
  나중에 fold시 인자간의 타입을 서로 맞춰주기 위해서이다.
