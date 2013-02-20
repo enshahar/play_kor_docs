@@ -1,0 +1,98 @@
+# 오일러 프로젝트 문제 풀이 - 2번 문제
+
+## 문제 2
+
+피보나치 수열의 각 항은 바로 앞의 항 두 개를 더한 것이 됩니다. 1과 2로 시작하는 경우 이 수열은 아래와 같습니다.
+
+1, 2, 3, 5, 8, 13, 21, 34, 55, 89, ...
+짝수이면서 4백만 이하인 모든 항을 더하면 얼마가 됩니까?
+
+## 풀이(스칼라)
+
+### 일반적 fib함수를 사용한 풀이 
+
+일단 가장 쉬운 것은 재귀 함수에 의한 풀이일 것이다
+ 
+우선, 표준적인 이 문제의 피보나치 함수는 다음과 같이 작성할 수 있다.
+```scala
+def fib( n: Int ): Int = n match {
+    case 0 => 1 
+    case 1 => 2
+    case _ => fib(n-1) + fib(n-2)
+  }
+```
+
+이렇게 작성한 fib함수를 사용하면 계산 시간이 무진장 오래 걸릴 것이다. 이를 만회하기 위해 
+꼬리재귀를 사용하도록 변경한 fib_with_tail함수는 다음과 같다.
+
+```scala
+def fib_with_tail( n: Int ): Int = {
+  def fib_tail_rec( n: Int, b: Int, a: Int ): Int = n match {
+    case 0 => a 
+    case _ => fib_tail_rec( n-1, a + b, b )
+  }    
+  fib_tail_rec(n, 2, 1) // n==0일때 1, n==1일때 2
+}
+```
+
+fib()의 값이 400만 이하인 동안 돌면서 결과값을 리스트로 만든다면 될 것이다. 
+문제는 fib(n) <= 4000000인 n이 얼마인지를 알려면 fib(n)의 일반항에서 역으로 계산을 해야 한다는 점이다.
+(물론 fib(n)의 일반항 구하기는 고등학교 수학 수준이므로 못 풀것은 없다. 아니면 그냥 구글에서 찾아봐도 된다.)
+
+대신 0부터 시작하는 n에 대해 어떤 함수 f를 적용한 리스트를 만들되, f(n)의 값이 4000000이하일 동안만 리스트를 만들면 된다.
+
+이를 위해 먼저 다음과 같은 함수를 만들자. 시작값, 적용함수, 판단함수를 받는 리스트 생성 함수이다.
+
+```scala
+def gen_list_with_pred(n:Int, f:Int=>Int, pred:Int=>Boolean):List[Int] = 
+  if(pred(f(n))) {
+    f(n)::gen_list_with_pred(n+1, f, pred)
+  } else {
+    Nil
+  }
+```
+
+이를 사용하면 쉽게 다음과 같이 전체 값을 계산할 수 있다.
+
+1. `fib(n)<4000000` 인 fib(n)의 값 목록 얻기: `gen_list_with_pred(0, fib_with_tail, _<4000000)`
+2. 목록에서 짝수만 골라내기: `gen_list_with_pred(0, fib_with_tail, _<4000000).filter(_%2 == 0)`
+3. 2에서 얻은 값의 합계 구하기: `gen_list_with_pred(0, fib_with_tail, _<4000000).filter(_%2 == 0).sum`
+
+### 시퀀스 컴프리핸션을 사용한 풀이
+
+그런데 앞에서 만든 gen_list_with_pred가 하는 일을 살펴보면, 0부터 pred를 만족하는 n에 대해서만  
+f(n)의 값을 리스트로 만드는 것이다. 정확히 이런 일을 하는 것이 바로 스칼라의 시퀀스 컴프리핸션이다.
+
+0부터 (무한한) 시퀀스를 얻되, 조건식을 만족하는 것은 다음과 같이 표현 가능하다.
+
+
+
+for(i <- 0 until n;
+         j <- i + 1 until n if i + j == v) yield
+      Pair(i, j);
+
+
+
+
+--------------------------
+아래는 원 사이트(http://euler.synap.co.kr)의 카피라이트이다. 이에 따라 이 페이지의 라이센스도
+역시 Creative Commons License: Attribution-NonCommercial-ShareAlike 2.0 UK: England & Wales를
+따른다. 원 사이트의 원 사이트 –;; 는 http://projecteuler.net/이다.
+
+Copyright Information
+
+이곳에 실린 문제들은 사이트에 영문으로 수록된 것을 한글로 번역한 것입니다.
+원본 문제의 저작권은 Copyright Information 페이지에 설명된 것처럼
+Creative Commons License: Attribution-NonCommercial-ShareAlike 2.0 UK: England & Wales 를 따르고 있습니다.
+
+한글 번역본은 원본의 파생 저작물(derivative work)로 볼 수 있으므로,
+위 Creative Commons License의 내용에 따라 동일한 (Share Alike) 라이선스를 따릅니다.
+라이선스의 내용을 간단히 요약하면 아래와 같습니다.
+복사, 배포, 전시 및 파생 저작물을 만들기 위한 행위가 허용됩니다.
+
+그에 따르는 조건은,
+Attribution – 원 저작자에 대한 정보를 제공해야 합니다.
+Non-Commercial – 상업적인 목적으로 이용할 수 없습니다.
+Share Alike – 만약 이 저작물의 내용을 변경, 변형하거나 이를 기반으로 파생 저작물을 만든 경우 본 라이선스와 동일한 라이선스를 적용해야 합니다.
+
+자세한 내용은 해당 라이선스의 요약문 및 라이선스 전문을 참고하시기 바랍니다.
