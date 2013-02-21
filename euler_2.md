@@ -530,7 +530,7 @@ def fibs( n: Int ): Stream[Int] = n match {
 ```
 
 이를 개선할 방법은? 일단 소극적으로는 fibs(n-1).head = fibs(n-2).tail.head라는 점을 이용해 
-스크림을 공유해 보는 것이다. 역시 내 PC에서 11:02분에 시작해 
+스크림을 공유해 보는 것이다. 해보면 약간 속다가 빨라지긴 하지만, 그렇게 실용적이지는 않아 보인다.
 
 ```scala
 def fibs2( n: Int ): Stream[Int] = n match {
@@ -542,6 +542,37 @@ def fibs2( n: Int ): Stream[Int] = n match {
     }
   }
 ```
+
+다시 좀 더고민해 보면? 어차피 fibs2(0)이란 무한수열이 있다면, 그 뒤의 fibs(0)(n-1)등은 그냥 얻을 수 있다.
+이를 잘 생각해 보면 다음과 같이 쓸 수 있다.
+
+```scala
+lazy val fibs3: Stream[Int] = {
+    def f(x:Int) : Stream[Int] =
+      if(x==0) 1 #:: f(1)
+      else if(x==1) 2 #:: f(2)
+      else (fff(x-1)+fff(x-2))#::f(x+1)
+    f(0)
+  }
+
+lazy val fibs3_log: Stream[Int] = {
+    def f(x:Int) : Stream[Int] =
+      if(x==0) 1 #:: f(1)
+      else if(x==1) 2 #:: f(2)
+      else ({ println("fibs:" + (x-1) + "+" + (x-2));; fff(x-1)+fff(x-2)})#::f(x+1)
+    f(0)
+  }  
+```
+
+로그를 넣은 버전으로 돌려보면, 결과는 놀랍다. 잘 설계한 스트림은 메모이제이션 효과를 절로 가져오게 된다.
+
+이제 스트림 설계에 있어 일반론을 이야기할 수 있을 것이다.
+
+1. 원래 i번째 원소를 계산하는 함수 f가 있다면, 이를 Stream[Retur을 반환하는 함수로 변경한다. 일단은 함수를 그대로 복사해서 
+값을 반환할 때마다 
+2. 
+
+
 
 
 
