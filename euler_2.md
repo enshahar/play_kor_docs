@@ -78,6 +78,7 @@ def from(i:Int):Stream[Int] = i #:: from(i+1)
 
 이제 이 무한 시퀀스를 사용해 무한 피보나치 수열을 얻을 수 있다.
 ```scala
+// 사실은 그냥 from(0).map(fib_with_tail)해도 된다.
 val fibs = for( i <- from(0) ) yield fib_with_tail(i)
 ```
 
@@ -88,6 +89,48 @@ val fibs_even = fibs filter (_%2 == 0)
 val fibs_even_under_4000000 = fibs_even takeWhile(_<4000000)
 val fibs_even_under_4000000_sum = fibs_even_under_4000000.sum
 ```
+
+#### 주의: 왜 굳이 takeWhile을 사용하는걸까? filter를 사용하면 안되나?
+
+위 문제를 잘 살펴보면 리스트 컴프리핸션에서 단순히 from(0)의 원소에 대해 fib_with_tail(i)를 적용한 무한
+시퀀스를 얻어서 `takeWhile`로 400만 이하인 값만 취하는 것을 볼 수 있다. 
+
+그렇다면 리스트 컴프리핸션에 조건을 넣을 수는 없는걸까?
+
+```scala
+val fibs_under_4000000 = for( i <- from(0) if fib_with_tail(i)<4000000 ) yield fib_with_tail(i)
+val fibs_even_under_4000000 = fibs_under_4000000 filter (_%2 == 0)
+val fibs_even_under_4000000_sum = fibs_even_under_4000000.sum
+```
+
+이렇게 코드를 변경하고, 실행해 보라. 무한루프를 돌 것이다. 그럼 takeWhile 대신 filter를 사용해
+다음과 같이 한다면?
+
+```scala
+val fibs_even = fibs filter (_%2 == 0)
+val fibs_even_under_4000000 = fibs_even filter(_<4000000)
+val fibs_even_under_4000000_sum = fibs_even_under_4000000.sum
+```
+역시 무한루프를 돈다. 게다가 화면에 출력되는 값을 보면 피보나치 값도 음수가 되었다 양수가 되었다 함을
+알 수 있다.
+
+음수/양수가 왔다갔다 하는건 전형적인 정수 overflow 증상이다. 이는 데이터형을 변경하거나, 
+400만 이하의 함수를 제대로 필터링할 수 있게 되면 문제가 안될 수 있다.
+
+무한루프를 도는 또 다른 이유는 `filter`는 필터를 만족하는 `모든` 원소를 포함하는 스트림을 반환하기 때문이다.
+따라서 무한 스트림에 대해 필터를 적용해 유한 스트림이 되더라도, 무한 스트림의 `모든` 원소에 대해 필터 함수를 
+검사해야 한다. 따라서 무작적 `filter`를 사용하면 원하는 결과를 얻지 못하는 경우가 생긴다.
+
+이를 방지하기 위해서는 다음에 주의해야 한다.
+
+1. 무한시퀀스를 만들 때 순서가 일정하게(예: 단조증가/단조감소/BFS/DFS등) 하라. 따라서 무한시퀀스를 
+생성하는 제너레이터 함수를 만들 때부터 주의깊게 설계해야 한다.
+2. 무한 시퀀스에 필터를 적용한 경우에는 그 시퀀스를 사용해 다른 시퀀스를 만드는 것은 문제 없지만(이경우 
+다시 무한 시퀀스가 생기므로, 3의 원칙을 사용해 필요한 작업을 하면 된다), sum등 모든 원소를 대상으로 
+하나하나 연산을 수행해야만 하는 경우를 피하라.
+3. 무한 시퀀스에서 유한 시퀀스를 만들려면, takeWhile과 1의 시퀀스를 사용하거나,
+원하는 갯수만큼 원소를 얻어와 사용하거나, 시퀀스 대상으로 이터레이션하면서 
+원하는 정보를 다 얻어올 때 까지만 작업을 수행해야 한다.
 
 ### 성능 문제
 문제는 어떻게든 풀 수 있지만, 성능은 어떨까?
@@ -115,6 +158,7 @@ def fib_with_tail( n: Int ): Int = {
 
 def from(i:Int):Stream[Int] = i #:: from(i+1)
 
+// 사실은 그냥 from(0).map(fib_with_tail)해도 된다.
 val fibs = for( i <- from(0) ) yield fib_with_tail(i)
 
 val fibs_even = fibs filter (_%2 == 0)
@@ -238,6 +282,7 @@ object Foo {
 ```scala
 def from(i:Int):Stream[Int] = i #:: from(i+1)
 
+// 사실은 그냥 from(0).map(Foo.memo_fib)해도 된다.
 val fibs = for( i <- from(0) ) yield Foo.memo_fib(i)
 
 val fibs_even = fibs filter (_%2 == 0)
@@ -253,11 +298,13 @@ val fibs_even_under_4000000_sum = fibs_even_under_4000000.sum
 scala> def from(i:Int):Stream[Int] = i #:: from(i+1)
 from: (i: Int)Stream[Int]
 
-scala> val fibs = for( i <- from(0) ) yield Foo.memo_fib(i)
+scala> // 스트림을 만들 때 맨 첫 원소는 평가함을 알 수 있다.
+val fibs = for( i <- from(0) ) yield Foo.memo_fib(i)
 add : 0->1
 fibs: scala.collection.immutable.Stream[Int] = Stream(1, ?)
 
-scala> val fibs_even = fibs filter (_%2 == 0)
+scala> // 필터를 하면 필터를 만족하는 맨 처음 원소까지는 값을 평가함을 알 수 있다.
+val fibs_even = fibs filter (_%2 == 0)    
 add : 1->2
 fibs_even: scala.collection.immutable.Stream[Int] = Stream(2, ?)
 
@@ -401,6 +448,101 @@ fibs_even_under_4000000_sum: Int = 4______
 
 scala>
 ```
+
+### 스트림 활용하기
+
+앞에서는 `from(0)`을 사용해 정수 시퀀스를 만들고, 이 정수 시퀀스에 `fib()`함수를 적용해 무한 피보나치 
+시퀀스를 만들었다. 하지만, 직접 피보나치 시퀀스를 만들지 못할 이유가 어디 있을까?
+
+우선 무식한 피보나치 수열 함수를 보자.
+```scala
+def fib( n: Int ): Int = n match {
+    case 0 => 1 
+    case 1 => 2
+    case _ => fib(n-1) + fib(n-2)
+  }
+```
+
+이를 스트림을 만드는 함수 fibs로 바꾼다고 생각해 보자. 우선 반환타입이 `Stream[Int]`가 되어야 한다. 
+그러면 반환값 타입에 맞춰 각 `case`의 뒤에 적당한 스트림을 붙여주면 된다.
+
+```scala
+def fibs( n: Int ): Stream[Int] = n match {
+    case 0 => 1 #:: fibs(1)
+    case 1 => 2 #:: fibs(2)
+    case _ => (fibs(n-1) + fibs(n-2)) #:: fibs(n+1)
+  }
+```
+
+일단 이렇게 바꾸고 잘 되나 보자.
+
+```scala
+scala> def fibs( n: Int ): Stream[Int] = n match {
+     |     case 0 => 1 #:: fibs(1)
+     |     case 1 => 2 #:: fibs(2)
+     |     case _ => (fibs(n-1) + fibs(n-2)) #:: fibs(n+1)
+     |   }
+<console>:10: error: type mismatch;
+ found   : Stream[Int]
+ required: String
+           case _ => (fibs(n-1) + fibs(n-2)) #:: fibs(n+1)
+                                      ^
+```
+
+앗! fibs(n-1)이나 fibs(n-2)는 스트림이기 때문에, 직접 사용할 수가 없다. 이를 각 스트림의 첫 원소를 가져오게
+바꾸자.
+
+```scala
+def fibs( n: Int ): Stream[Int] = n match {
+    case 0 => 1 #:: fibs(1)
+    case 1 => 2 #:: fibs(2)
+    case _ => (fibs(n-1).head + fibs(n-2).head) #:: fibs(n+1)
+  }
+```
+
+이제 컴파일이 잘 된다. 이런저런 장난을 해보면 잘 됨을 볼 수 있다.
+
+```scala
+scala> lazy val fibss = fibs(0)
+fibss: Stream[Int] = <lazy>
+
+scala> fibss(32)
+res4: Int = 5702887
+
+scala> fibss
+res5: Stream[Int] = Stream(1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610
+, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418
+, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, ?)
+
+scala> fibss.takeWhile(_<4000000).filter(_%2==0).sum
+res6: Int = 4______
+```
+
+성능 체크를 위해 print를 넣어보면, 결과가 참혹하다 내 PC(intel core-i5 2400 3.2GHz)에서 10:55분에 시작해서,
+4분 정도가 걸렸다.
+
+```scala
+def fibs( n: Int ): Stream[Int] = n match {
+    case 0 => 1 #:: fibs(1)
+    case 1 => 2 #:: fibs(2)
+    case _ => { println("fibs:" + (n-1) + "+" + (n-2)); (fibs(n-1).head + fibs(n-2).head) #:: fibs(n+1) }
+  }
+```
+
+이를 개선할 방법은? 일단 소극적으로는 fibs(n-1).head = fibs(n-2).tail.head라는 점을 이용해 
+스크림을 공유해 보는 것이다. 역시 내 PC에서 11:02분에 시작해 
+
+```scala
+def fibs2( n: Int ): Stream[Int] = n match {
+    case 0 => 1 #:: fibs2(1)
+    case 1 => 2 #:: fibs2(2)
+    case _ => { 
+       lazy val fibs_n_2 = fibs(n-2)
+       println("fibs:" + (n-1) + "+" + (n-2)); (fibs_n_2.tail.head + fibs_n_2.head) #:: fibs(n+1) 
+    }
+  }
+```
+
 
 
 --------------------------
