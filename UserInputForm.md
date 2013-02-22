@@ -36,13 +36,211 @@
 (자세한 것은 [폼 튜플 처리에 대한 내 글](http://enshahar.com/2013/02/17/form-처리에-대해-폼-튜플-처리/)을 보라)
 
 ```scala
-  val userForm = Form(
-    mapping(
-      "id" -> optional(longNumber),
-      "loginname" -> nonEmptyText
-      "name" -> nonEmptyText,
-      "mobile" -> text
-    )(User.apply, User.unapply)
-  )  
+  // 일부러 폼관련 메소드/객체에는 FQN을 사용함
+  val userForm = play.api.data.Form(
+    play.api.data.Forms.mapping (
+      "id" -> play.api.data.Forms.optional(play.api.data.Forms.longNumber),
+      "loginname" -> play.api.data.Forms.nonEmptyText,
+      "name" -> play.api.data.Forms.nonEmptyText,
+      "mobile" -> play.api.data.Forms.text
+    )(User.apply)(User.unapply)
+  )
 ```
 
+위와 같은 userForm 선언을 `app/models/User.scala`의 `Users` 객체에 넣자.
+
+### 폼 정의시 사용할 수 있는 매핑들
+폼 정의시 사용할 수 있는 각종 매핑에는 다음과 같은 것들이 있다(주로 play.api.data.Forms 객체에 정의되어 있다.)
+
+* String 매핑들
+
+    * `val text`
+    * `val nonEmptyText`
+    * `def text(minLength: Int = 0, maxLength: Int = Int.MaxValue)`
+    * `def nonEmptyText(minLength: Int = 0, maxLength: Int = Int.MaxValue)`
+
+* 수 매핑들 
+   
+    * `val number`
+    * `val longNumber`
+    * `def number(min: Int = Int.MinValue, max: Int = Int.MaxValue, strict: Boolean = false)`
+    * `def longNumber(min: Long = Long.MinValue, max: Long = Long.MaxValue, strict: Boolean = false)`
+    * `val bigDecimal`
+    * `def bigDecimal( precision : Int, scale: Int )`
+
+* 날짜 매핑들
+
+    * `val date`
+    * `def date(pattern: String, timeZone: java.util.TimeZone = java.util.TimeZone.getDefault)`
+    * `val sqlDate`
+    * `def sqlDate(pattern: String, timeZone: java.util.TimeZone = java.util.TimeZone.getDefault)`
+    * `val jodaDate`
+    * `def jodaDate(pattern: String, timeZone: org.joda.time.DateTimeZone = org.joda.time.dateTimeZone.getDefault)`
+    * `val jodaLocalDate`
+    * `def jodaLocalDate(pattern: String)`
+
+
+* 다른 매핑을 감싸는 매핑
+  
+    * `def ignored[A](value: A)`
+    * `def optional[A](mapping: Mapping[A])`
+    * `def default[A](mapping: Mapping[A], value:A)`
+    * `def list[A](mapping: Mapping[A])`
+    * `def seq[A](mapping: Mapping[A])`
+
+* 전자우편 주소
+
+    * `val email`
+
+* 불린 필드 매핑
+
+    * `val boolean`
+    * `def checked(msg: String)`
+    
+## 사용자 입력
+
+이제 폼을 정의했으니, 사용자 입력 화면을 구성해보자.
+
+우선 사용자 입력을 받을 컨트롤러 액션을 `conf/routes`에 추가해야한다.
+하는김에 예전에 선언했던 `POST /users` 경로의 액션을 `saveUser`로 바꾸고,
+새 사용자 입력화면은 `newUser`를 사용하도록 하자.
+
+```scala
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# Home page
+GET     /                           controllers.Application.index
+
+# Map static resources from the /public folder to the /assets URL path
+GET     /assets/*file               controllers.Assets.at(path="/public", file)
+
+# Map user related urls - 12/02/2013
+GET /users			controllers.Application.users
+GET /users/new 		controllers.Application.newUser
+GET	/users/:id		controllers.Application.user(id: Long)
+POST	/users			controllers.Application.saveUser	
+POST	/users/:id/delete	controllers.Application.deleteUser(id: Long)
+POST	/users/:id/modify	controllers.Application.modifyUser(id: Long)
+```
+
+이제 컨트롤러 함수를 추가하자. `app/controllers/Application.scala`에 
+다음과 같은 코드를 넣는다.
+
+```scala
+  ... 생략 ...
+  // 사용자 폼을 표시한다.
+  def newUser = Action {
+    Ok(views.html.user.createForm(Users.userForm))
+  }
+
+  def saveUser = TODO
+  ... 생략 ...
+```
+
+이제 createForm이라는 html 템플릿을 넣어야 한다. `app/views/user/createForm.scala.html`을 
+넣자.
+
+```
+@(userForm: Form[models.User] )
+
+@import helper._
+
+    <h1>사용자 추가</h1>
+    
+    @form(routes.Application.saveUser()) {
+         
+        <fieldset>
+        
+            @inputText(userForm("loginname"), '_label -> "로그인 이름")
+            @inputText(userForm("name"), '_label -> "이름")
+            @inputText(userForm("mobile"), '_label -> "휴대전화")
+
+        </fieldset>
+        
+        <div class="actions">
+            <input type="submit" value="사용자 추가" class="btn primary"> or 
+            <a href="@routes.Application.users()" class="btn">취소</a> 
+        </div>
+        
+    }
+```
+
+이 코드에 대해서는 약간 설명이 필요할 수도 있다.
+
+* 첫 줄의 `@(userForm: Form[models.User] )`은 `userForm`이라는 인자를 받는 템플릿임을 선언하는 것이다.
+* `@form(routes.Application.saveUser()) { ... } `는 폼 액션을 지정해 폼을 출력하게 한다. 
+* `routes.Application.saveUser()`는 URL 매핑(`conf/routes`)에서 `Application.saveUser()`에 대한 URL을 가져온다.
+* `@inputText(userForm("loginname"), '_label -> "로그인 이름")`는 텍스트 입력 필드를 만들어낸다. 화면에 `_label`로 지정한 값을 필드 앞에 표시해준다.
+
+이제 이 코드를 다 번영하고 나서 리로드를 하면 다음과 같은 입력 화면을 볼 수 있다. 
+
+여기서 '사용자 추가' 버튼을 눌러도 실제 데이터를 넣는 액션(`saveUser()`)을 구현하지 않았기 때문에 `TODO` 화면만 표시된다.
+
+### 입력 필드 출력 처리 과정(소스분석임. 건너 띄어도 좋음)
+
+입력 필드를 생성하는 코드들은 views.html.helper 패키지 안에 있다.
+(소스코드는 `$PLAY_HOME/framework/src/play/src/main/scala/views/helper/`아래 있다.)
+
+`inputText()`의 경우 html파일 관례에 따라 inputText.scala.html 안에 들어가 있다.
+이해를 돕기 위해 잠시 들여다 보자. 
+
+```scala
+@**
+ * Generate an HTML input text.
+ *
+ * Example:
+ * {{{
+ * @inputText(field = myForm("name"), args = 'size -> 10, 'placeholder -> "Your name")
+ * }}}
+ *
+ * @param field The form field.
+ * @param args Set of extra attributes.
+ * @param handler The field constructor.
+ *@
+@(field: play.api.data.Field, args: (Symbol,Any)*)(implicit handler: FieldConstructor, lang: play.api.i18n.Lang)
+
+@inputType = @{ args.toMap.get('type).map(_.toString).getOrElse("text") }
+
+@input(field, args.filter(_._1 != 'type):_*) { (id, name, value, htmlArgs) =>
+    <input type="@inputType" id="@id" name="@name" value="@value" @toHtmlArgs(htmlArgs)>
+}
+```
+
+커맨트 다음의 `@(field: play.api.data.Field, args: (Symbol,Any)*)(implicit handler: FieldConstructor, lang: play.api.i18n.Lang)`를 보면 우리가 이를 호출할 때 사용한 `@inputText(userForm("loginname"), '_label -> "로그인 이름")`과 맞춰볼 수 있다. 뒤의 `args: (Symbol, Any)*`부분은 `'_label -> "로그인 이름"`과 타입이 일치한다. 
+첫번째 인자 `field: play.api.data.Field`부분을 살펴보면, `userForm("loginname")`으로 호출했다. `Form` 클래스를 보면 `def apply(key: String): Field`라고 Field타입을 반환하게 되어 있다. 이때 폼이 가지고 있는 제약사항과 형식, 오류, 데이터 등의 정보를 Field에 담아 반환한다.
+
+`@inputType = @{ args.toMap.get('type).map(_.toString).getOrElse("text") }`는 혹시 `args`에 `'type`이라는 심볼로 정의된 값이 있는지 봐서 그 값을 사용하거나, 디폴트로 `"text"`를 사용한다.
+
+그리고 나서, `input()`이라는 메소드에 처리를 넘긴다. 먼저 `input.scala.html`이 있나 살펴보면, `inputText.scala.html`과 같은 디렉터리에 있다.
+
+```scala
+@**
+ * Prepare a generic HTML input.
+ *@
+@(field: play.api.data.Field, args: (Symbol, Any)* )(inputDef: (String, String, Option[String], Map[Symbol,Any]) => Html)(implicit handler: FieldConstructor, lang: play.api.i18n.Lang)
+
+@id = @{ args.toMap.get('id).map(_.toString).getOrElse(field.id) }
+
+@handler(
+    FieldElements(
+        id,
+        field,
+        inputDef(id, field.name, field.value, args.filter(arg => !arg._1.name.startsWith("_") && arg._1 != 'id).toMap),
+        args.toMap,
+        lang
+    )
+)
+```
+
+`input()`의 인자 타입을 `inputText`내에서 `input`을 호출한 부분과 비교해 보자.
+
+* 첫번째 인자로 `field`를 넘긴다.
+* 두번째 인자로 `'type`을 제외한 나머지 `args`를 넘긴다.
+* 마지막 인자로 `(id, name, value, htmlArgs)`를 받아 HTML 코드(`<input type="@inputType" id="@id" name="@name" value="@value" @toHtmlArgs(htmlArgs)>`)를 만드는 함수를 전달하고 있다.
+
+`input()`에서는 인자들을 받아서, `'id`를 빼내고, `handler()`함수에 `FieldElements()`를 생성해 전달한다.
+
+`FieldElements()`는 `input.scala.html`과 같은 디렉터리에 있는 `Helpers.scala`에 정의되어 있다.
+`handler()`는 implicit인자이다. 특별히 지정하지 않았으므로, 
