@@ -243,4 +243,50 @@ POST	/users/:id/modify	controllers.Application.modifyUser(id: Long)
 `input()`에서는 인자들을 받아서, `'id`를 빼내고, `handler()`함수에 `FieldElements()`를 생성해 전달한다.
 
 `FieldElements()`는 `input.scala.html`과 같은 디렉터리에 있는 `Helpers.scala`에 정의되어 있다.
-`handler()`는 implicit인자이다. 특별히 지정하지 않았으므로, 
+`handler()`는 implicit인자이다([A Tour of Scala: Implicit Parameters](http://www.scala-lang.org/node/114)를 살펴보라.). 
+
+잠깐 딴길로 새자....
+
+---
+implicit 인자를 직접 지정하지 않고 메소드를 호출하면 다음 순서대로 implicit 객체를 찾는다.
+
+* 현재 위치에서 직접 보이는(lexical scope상으로 상위) 곳에 정의된 implicit 인자와 타입이 일치하는 객체
+* implicit 인자의 타입(클래스)의 컴패니언 객체에 정의된 implicit 값 중 타입이 일치하는 객체
+
+아래는 간단하게 위 규칙을 보여주는 예이다. 
+
+```scala
+// implicit 매개변수 객체 찾기 규칙을 보여주는 예
+// 이를 Test.scala등으로 저장해 컴파일한 후, `scala Test`로 실행해 보시오.
+case class User(val x:Int) 
+
+object User {
+  implicit val defaultUser:User = User(999)
+}
+ 
+object Test {
+  implicit val user1 = User(10)
+  val user2 = User(20)
+   
+  def main(args:Array[String])
+  {
+    def addUser(x:User)(implicit user1:User) = x.x + user1.x
+    
+    println(addUser(user1)(user2))
+    println(addUser(user2))
+  }
+}
+
+```
+
+---
+
+이제 다시 돌아와서 `handler`의 타입을 보면 `FieldConstructor`이다. `Helper.scala`를 보면 
+`implicit val defaultField = FieldConstructor(views.html.helper.defaultFieldConstructor.f)`라는 
+정의를 볼 수 있다.
+
+결국, `inputText`는 `input`을 거쳐 `defaultFieldConstructor`라는 템플릿의 함수를 호출하게 된다.
+
+이 템플릿을 보면 
+
+
