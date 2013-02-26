@@ -287,6 +287,25 @@ object Test {
 
 결국, `inputText`는 `input`을 거쳐 `defaultFieldConstructor`라는 템플릿의 함수를 호출하게 된다.
 
-이 템플릿을 보면 
+이 템플릿을 보면 다음과 같다.
 
+```scala
+@(elements: FieldElements)
+<dl class="@elements.args.get('_class) @if(elements.hasErrors) {error}" id="@elements.args.get('_id).getOrElse(elements.id + "_field")">
+    <dt><label for="@elements.id">@elements.label(elements.lang)</label></dt>
+    <dd>@elements.input</dd>
+    @elements.errors(elements.lang).map { error =>
+        <dd class="error">@error</dd>
+    }
+    @elements.infos(elements.lang).map { info =>
+        <dd class="info">@info</dd>
+    }
+</dl>
+```
 
+살펴보면 폼에 오류가 있는 경우에는 오류 정보를 표시하고, 그렇지 않은 경우에는 정보를 표시하는 형태임을 알 수 있다.
+
+## 사용자 입력 처리
+
+이제 사용자 입력 폼의 작성이 끝났다. 폼에 사용자 정보를 입력하고 등록 버튼을 누르면, 데이터베이스에 사용자 정보를 업데이트해야 한다.
+이 작업은 slick(예전에는 scalaQuery였음)을 사용할 것이다. 이에 대해서는 다음에 살펴보도록 하겠다.
