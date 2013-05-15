@@ -17,13 +17,13 @@
 
 일반적 케이스 클래스는 타입인자를 가지고 있는 케이스 클래스이다. 
 
-  case class Foo[T](val v1:T, val v2:Int)
+    case class Foo[T](val v1:T, val v2:Int)
 
 위와 같이 정의하면 스칼라 케이스 클래스가 자동으로 제공하는 도우미 객체를 사용해 `Foo("10",1)`과 같이 바로 객체 생성도 가능하고, `Foo(10,10).copy()`같이 복사생성도 가능하며, `Foo(10,10).copy(v2=100)`과 같이 기존 객체에서 특정 필드만 바꾼 새 객체의 생성도 가능하다.
 
 타입 인자 T가 클래스 내에서 전혀 쓰이지 않을 수도 있다. 다음과 같이 `Bar` 클래스가 있다면,
 
-  case class Bar[T](val v:String)
+    case class Bar[T](val v:String)
 
 `Bar("10")`은 `Bar[Nothing]`타입의 객체를 만든다. 만약 `Nothing`이 아닌 다른 타입을 지정하고 싶다면 `Bar[Int]("test")`와 같이 써야 한다.
 
