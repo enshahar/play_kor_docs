@@ -551,7 +551,7 @@ lazy val fibs3: Stream[Int] = {
     def f(x:Int) : Stream[Int] =
       if(x==0) 1 #:: f(1)
       else if(x==1) 2 #:: f(2)
-      else (fff(x-1)+fff(x-2))#::f(x+1)
+      else (fibs3(x-1)+fibs3(x-2))#::f(x+1)
     f(0)
   }
 
@@ -559,7 +559,7 @@ lazy val fibs3_log: Stream[Int] = {
     def f(x:Int) : Stream[Int] =
       if(x==0) 1 #:: f(1)
       else if(x==1) 2 #:: f(2)
-      else ({ println("fibs:" + (x-1) + "+" + (x-2));; fff(x-1)+fff(x-2)})#::f(x+1)
+      else ({ println("fibs:" + (x-1) + "+" + (x-2));; fibs3_log(x-1)+fibs3_log(x-2)})#::f(x+1)
     f(0)
   }  
 ```
